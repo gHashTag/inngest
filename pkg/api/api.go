@@ -2,7 +2,11 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
+	"regexp"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -144,6 +148,8 @@ func (a API) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+var eventNameRe = regexp.MustCompile(`"name"\s*:\s*"([^"]{1,120})"`)
+
 func (a API) ReceiveEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	defer r.Body.Close()
@@ -181,7 +187,24 @@ func (a API) ReceiveEvent(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if !found {
-			a.log.Error("rejecting event; event key not recognized")
+			// Fork diagnostics: never log the key itself, only a hash prefix and
+			// length, plus who sent it and which event names were carried.
+			sum := sha256.Sum256([]byte(key))
+			peek, _ := io.ReadAll(io.LimitReader(r.Body, 16<<10))
+			names := []string{}
+			for _, m := range eventNameRe.FindAllSubmatch(peek, 5) {
+				names = append(names, string(m[1]))
+			}
+			a.log.Error("rejecting event; event key not recognized",
+				"key_sha256_prefix", hex.EncodeToString(sum[:4]),
+				"key_len", len(key),
+				"user_agent", r.UserAgent(),
+				"remote_addr", r.RemoteAddr,
+				"x_forwarded_for", r.Header.Get("X-Forwarded-For"),
+				"x_real_ip", r.Header.Get("X-Real-Ip"),
+				"host", r.Host,
+				"event_names", names,
+			)
 			w.Header().Add("Content-Type", "application/json")
 			a.writeResponse(w, apiResponse{
 				StatusCode: http.StatusUnauthorized,
