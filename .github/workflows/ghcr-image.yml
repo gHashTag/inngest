@@ -69,8 +69,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/inngest:mcp-auth
-            ghcr.io/${{ github.repository_owner }}/inngest:${{ steps.ver.outputs.version }}
+            ghcr.io/ghashtag/inngest:mcp-auth
+            ghcr.io/ghashtag/inngest:${{ steps.ver.outputs.version }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.ver.outputs.version }}
